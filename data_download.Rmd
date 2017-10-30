@@ -1,0 +1,315 @@
+---
+title: "Intitial Work"
+output: html_document
+---
+
+
+
+## Setting up for grabbing this Data
+
+## Setup
+
+```{r, eval=FALSE}
+
+## This function takes the packages that our program needs. 
+## It makes sure you have them on your computer before proceeding.
+
+source("check_packages.R")
+check_packages(c("httr","XML","stringr","jsonlite"))
+```
+
+
+## Initial Scraping
+
+ We begin by looking at the [Dunkin Donuts Store Locator](https://www.dunkindonuts.com/content/dunkindonuts/en/stores.html). If we want to scrape around the school we can enter the address:
+ 
+ <br/>
+<div style="text-align:center; width:800px">
+![locations](pics/dunkin_1.png)
+ </div>
+<br/>
+
+We then wish to be able to get this information. If we are in chrome we can do an inspection of the website:
+<br/>
+<div style="text-align:center; width:800px">
+![locations](pics/dunkin_2.png)
+ </div>
+<br/>
+
+
+We can see that Dunkin Donuts uses Mapquest to create their maps. Looking under Networks we can see that the radius api:
+
+```
+https://www.mapquestapi.com/search/v2/radius?callback=jQuery1111047462178359151475_1479824752599&key=Gmjtd%7Clu6t2luan5%252C72%253Do5-larsq&origin=Providence%2C+RI+02906&units=m&maxMatches=50&ambiguities=ignore&radius=50&hostedData=mqap.33454_DunkinDonuts&_=1479824752602
+```
+
+This file contains the following:
+
+```
+jQuery1111047462178359151475_1479824752599({
+    "searchResults":[{
+        "resultNumber":1,"distance":0.9343,
+            "sourceName":"mqap.33454_DunkinDonuts","name":"Dunkin Donuts",
+            "shapePoints":[41.849547,-71.403038],"distanceUnit":"m",
+            "key":"a76662c6-0c12-4878-ae44-ab473d4fc3d3",
+            "fields":{"almond":"Y","beverageonly":"N","dunkincardenabled":"
+            
+```
+
+We can then download this data in order to recover it, however the `jQuery1111047462178359151475_1479824752599` is garbage so we delete if from the API. 
+
+```{r, eval=FALSE}
+url = "https://www.mapquestapi.com/search/v2/radius?&key=Gmjtd%7Clu6t2luan5%252C72%253Do5-larsq&origin=02906&units=m&maxMatches=50&ambiguities=ignore&radius=5&hostedData=mqap.33454_DunkinDonuts&_=1479846828271"
+
+d=GET(url)
+
+
+stopifnot(d$status_code == 200)
+
+dir.create("json/", showWarnings = FALSE)
+
+file = paste0("json/",zip,".json")
+write(content(d, as="text"), file=file)
+```
+
+
+
+Above would allow us to just find the ones in the providence area. Now we can create a function to download this data for any zipcode. We can also set it up to declare a radius and matches. 
+
+```{r, eval=FALSE}
+
+get_dunkin <- function(zip, matches=4000, radius=3000){
+  
+  url_part1 <- "https://www.mapquestapi.com/search/v2/radius?&key=Gmjtd%7Clu6t2luan5%252C72%253Do5-larsq&origin="
+  url_part2 <- "&units=m&maxMatches="
+  url_part3 <- "&ambiguities=ignore&radius="
+  url_part4 <- "&hostedData=mqap.33454_DunkinDonuts&_=1479846828271"
+  
+  
+  #Create directory, if it already exists then dont show warnings.
+  # This eliminates the need for setwd
+  # you can run my code and it will create these files whereever you store this data in
+  dir.create("json/", showWarnings = FALSE)
+  
+  
+  #Get the data
+  #Write the data into a JSON file
+  
+  for (i in 1:length(zip)){
+    url <- paste0(url_part1, zip[i], url_part2, matches[i], url_part3[i], radius[i], url_part4)
+    
+    d=GET(url)
+    file = paste0("json/",zip[i],".json")
+    write(content(d, as="text"), file=file)
+    
+  }
+}
+```
+
+
+Now that we have our data in json 
+
+```{r, eval=FALSE}
+
+
+create_list <- function(zip){
+  
+  #Create directory, if it already exists then dont show warnings.
+  # This eliminates the need for setwd
+  # you can run my code and it will create these files whereever you store this data in
+  dir.create("data/", showWarnings = FALSE)
+  
+  
+  #Take the same zip codes used before
+  # read the json file in.
+  # export out into rda format
+  for (i in 1:length(zip)){
+    file = paste0("json/",zip[i],".json")
+    file
+    dd <- readLines(file)
+  
+  
+    j = fromJSON(dd, simplifyDataFrame=FALSE)
+    
+    outfile <- paste0("data/",zip[i],".rda")
+    save(j, file=outfile)
+    
+    }
+}
+
+
+```
+
+Finally we can take the `.rda` files and make the data frame that we want. If you look at one of the files we could run this:
+
+```{r, eval=FALSE}
+
+zip <- 02903
+get_dunkin(zip, 1, 500)
+create_df(zip)
+file <- paste0("data/",zip,".Rda")
+load(file)
+str(j)
+```
+
+
+
+We can then see that what we have is a large list:
+
+```
+> str(j)
+List of 7
+ $ searchResults:List of 1
+  ..$ :List of 8
+  .. ..$ resultNumber: int 1
+  .. ..$ distance    : num 0.0997
+  .. ..$ sourceName  : chr "mqap.33454_DunkinDonuts"
+  .. ..$ name        : chr "Dunkin Donuts"
+  .. ..$ shapePoints : num [1:2] 41.8 -71.4
+  .. ..$ distanceUnit: chr "m"
+  .. ..$ key         : chr "599e3ba5-f107-4f0a-b3f0-2cb988047647"
+  .. ..$ fields      :List of 45
+  .. .. ..$ almond             : chr "Y"
+  .. .. ..$ beverageonly       : chr "N"
+  .. .. ..$ dunkincardenabled  : chr "Y"
+  .. .. ..$ kosher             : chr "N"
+  .. .. ..$ state              : chr "RI"
+  .. .. ..$ turbooven          : chr "Y"
+  .. .. ..$ lng                : num -71.4
+  .. .. ..$ address2           : chr ""
+  .. .. ..$ dma_cd             : chr "521"
+  .. .. ..$ city               : chr "Providence"
+  .. .. ..$ mqap_geography     :List of 1
+  .. .. .. ..$ latLng:List of 2
+  .. .. .. .. ..$ lng: num -71.4
+  .. .. .. .. ..$ lat: num 41.8
+  .. .. ..$ wireless           : chr "Y"
+  .. .. ..$ sun_hours          : chr "07:00-12:00"
+  .. .. ..$ dunkinrunenabled   : NULL
+  .. .. ..$ k_cup              : chr "Y"
+  .. .. ..$ close_reason_cd    : chr ""
+  .. .. ..$ loyalty            : chr "N"
+  .. .. ..$ lat                : num 41.8
+  .. .. ..$ sat_hours          : chr "07:00-16:00"
+  .. .. ..$ combostore         : chr "N"
+  .. .. ..$ phonenumber        : chr "401-272-0374"
+  .. .. ..$ geocodequality     : NULL
+  .. .. ..$ wed_hours          : chr "06:00-20:00"
+  .. .. ..$ website            : chr "https://www.dunkindonuts.com"
+  .. .. ..$ postal             : chr "02903"
+  .. .. ..$ tue_hours          : chr "06:00-20:00"
+  .. .. ..$ mon_hours          : chr "06:00-20:00"
+  .. .. ..$ faxnumber          : chr "401-272-0374"
+  .. .. ..$ n                  : chr "Dunkin Donuts"
+  .. .. ..$ sitetype           : chr "SE"
+  .. .. ..$ operation_status_cd: chr "2"
+  .. .. ..$ fri_hours          : chr "06:00-18:00"
+  .. .. ..$ country            : chr "US"
+  .. .. ..$ mqap_quality       : chr "U1XXX"
+  .. .. ..$ drivein            : chr "N"
+  .. .. ..$ t                  : NULL
+  .. .. ..$ county             : chr "Providence"
+  .. .. ..$ address            : chr "81 Washington St"
+  .. .. ..$ mqap_id            : chr "599e3ba5-f107-4f0a-b3f0-2cb988047647"
+  .. .. ..$ adv_ord            : chr "Y"
+  .. .. ..$ thu_hours          : chr "06:00-20:00"
+  .. .. ..$ lc                 : chr "33454002"
+  .. .. ..$ co_brander_cd      : chr ""
+  .. .. ..$ recordid           : int 345439
+  .. .. ..$ mobile             : chr "N"
+ $ origin       :List of 18
+  ..$ latLng            :List of 2
+  .. ..$ lng: num -71.4
+  .. ..$ lat: num 41.8
+  ..$ adminArea4        : chr ""
+  ..$ adminArea5Type    : chr "City"
+  ..$ adminArea4Type    : chr "County"
+  ..$ adminArea5        : chr "Providence"
+  ..$ street            : chr ""
+  ..$ adminArea1        : chr "US"
+  ..$ adminArea3        : chr "RI"
+  ..$ type              : chr "s"
+  ..$ displayLatLng     :List of 2
+  .. ..$ lng: num -71.4
+  .. ..$ lat: num 41.8
+  ..$ linkId            : int 0
+  ..$ postalCode        : chr "02903"
+  ..$ sideOfStreet      : chr "N"
+  ..$ dragPoint         : logi FALSE
+  ..$ adminArea1Type    : chr "Country"
+  ..$ geocodeQuality    : chr "ZIP"
+  ..$ geocodeQualityCode: chr "Z1XXA"
+  ..$ adminArea3Type    : chr "State"
+ $ resultsCount : int 1
+ $ hostedData   :List of 1
+  ..$ :List of 3
+  .. ..$ tableName    : chr "mqap.33454_DunkinDonuts"
+  .. ..$ extraCriteria: chr ""
+  .. ..$ columnNames  : list()
+ $ totalPages   : int 1
+ $ info         :List of 3
+  ..$ statusCode: int 0
+  ..$ copyright :List of 3
+  .. ..$ text        : chr "© 2016 MapQuest, Inc."
+  .. ..$ imageUrl    : chr "http://api.mqcdn.com/res/mqlogo.gif"
+  .. ..$ imageAltText: chr "© 2016 MapQuest, Inc."
+  ..$ messages  : list()
+ $ options      :List of 8
+  ..$ kmlStyleUrl: chr "http://www.search.mapquestapi.com/kml-default.kml"
+  ..$ shapeFormat: chr "raw"
+  ..$ ambiguities: logi FALSE
+  ..$ pageSize   : int 1
+  ..$ radius     : int 500
+  ..$ currentPage: int 1
+  ..$ units      : chr "m"
+  ..$ maxMatches : int 1
+```
+
+Our next goal will be to create a data frame from all of this:
+
+```{r, eval=FALSE}
+
+
+
+try <- lapply(j$searchResults, 
+       function(x){
+         data.frame(
+           id = x$fields$recordid,
+           address = x$fields$address,
+           city = x$fields$city,
+           state =x$fields$state,
+           county=x$fields$county,
+           zipcode= x$fields$postal,
+           lat = x$fields$mqap_geography$latLng$lat,
+           long = x$fields$mqap_geography$latLng$lng,
+           wireless=x$fields$wireless, 
+           website=x$fields$website
+           )
+         }
+       )
+
+
+data <- do.call("rbind", try)
+
+
+
+
+data = unique(data)
+
+
+save(data, file = "Dunkin.Rdata")
+```
+
+
+We now have a data frame output from this. We then create the following functions from this data:
+
+```
+01_get_dunkin.R
+02_get_list.R
+03_clean_dunkin.R
+```
+
+We can then proceed to an analysis of these locations. 
+
+
+
